@@ -1,0 +1,8 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+
+# local dev secrets
+.env.local
