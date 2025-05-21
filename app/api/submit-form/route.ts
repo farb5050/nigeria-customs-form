@@ -21,6 +21,7 @@ function parseForm(req: any) {
 }
 
 export async function POST(req: Request) {
+  console.log("API handler started");
   try {
     // @ts-ignore
     const { fields, files } = await parseForm(req);
