@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { resend } from '@/lib/resendClient';
 import { supabase } from '@/lib/supabaseClient';
 import { IncomingForm } from 'formidable';
 import type { NextApiRequest } from 'next';
+import nodemailer from 'nodemailer';
 
 export const config = {
   api: {
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: dbError.message }, { status: 500 });
     }
 
-    // Send email via Resend
+    // Send email via Nodemailer
     const emailHtml = `
       <h2>New Form Submission</h2>
       <ul>
@@ -147,15 +147,23 @@ export async function POST(req: Request) {
       </ul>
     `;
 
+    const transporter = nodemailer.createTransport({
+      service: 'gmail', // Or use 'hotmail', 'outlook', etc., as needed
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
     let emailRes;
     try {
-      emailRes = await resend.emails.send({
-        from: 'noreply@ncs.gov.ng',
+      emailRes = await transporter.sendMail({
+        from: process.env.EMAIL_USER,
         to: ['suleiman.idris@customs.gov.ng', 'bisulaiman2010@gmail.com'],
         subject: `Customs Form Submission: ${productDescription || companyName || 'New Entry'}`,
         html: emailHtml,
       });
-      console.log("Resend response:", emailRes);
+      console.log("Nodemailer response:", emailRes);
     } catch (err: any) {
       console.error('Email sending error:', err);
       return NextResponse.json(
@@ -164,8 +172,8 @@ export async function POST(req: Request) {
       );
     }
 
-    if (emailRes?.error) {
-      return NextResponse.json({ success: false, error: emailRes.error }, { status: 500 });
+    if (emailRes?.rejected && emailRes.rejected.length > 0) {
+      return NextResponse.json({ success: false, error: `Rejected recipients: ${emailRes.rejected.join(', ')}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, dbData, emailRes });
