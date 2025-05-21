@@ -13,7 +13,7 @@ export const config = {
 function parseForm(req: any) {
   return new Promise<{ fields: any; files: any }>((resolve, reject) => {
     const form = new IncomingForm();
-    form.parse(req, (err, fields, files) => {
+    form.parse(req, (err: any, fields: any, files: any) => {
       if (err) reject(err);
       else resolve({ fields, files });
     });
