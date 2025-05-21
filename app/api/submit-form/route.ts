@@ -27,31 +27,83 @@ export async function POST(req: Request) {
     console.log("Received fields:", fields);
     console.log("Received files:", files);
 
-    let fullName, email, phone, subject, message;
+    let formData = {};
 
     if (fields.formDataJson) {
       try {
-        const formData = JSON.parse(fields.formDataJson);
-        fullName = formData.fullName || formData.exporterName;
-        email = formData.email || formData.exporterEmail;
-        phone = formData.phone;
-        subject = formData.subject;
-        message = formData.message;
+        formData = JSON.parse(fields.formDataJson);
       } catch (e) {
         console.error('Error parsing formDataJson:', e);
+        formData = {};
       }
     } else {
-      fullName = fields.fullName || fields.exporterName;
-      email = fields.email || fields.exporterEmail;
-      phone = fields.phone;
-      subject = fields.subject;
-      message = fields.message;
+      formData = fields; // fallback if sent as flat fields
     }
+
+    const {
+      companyName,
+      physicalAddress,
+      cityState,
+      postalCode,
+      tinNumber,
+      contactPerson,
+      phoneNumber,
+      emailAddress,
+      applicationDate,
+      originCriteria,
+      procedureDescription,
+      productDescription,
+      brandName,
+      hsCode,
+      countryOfExport,
+      destinationCountry,
+      commercialInvoiceNo,
+      invoiceDate,
+      exFactoryPrice,
+      fobValue,
+      quantityUnit,
+      packagingType,
+      inputMaterials,
+      manufacturingProcess,
+      declarantName,
+      signatureName,
+      signaturePosition,
+      signatureDate
+    } = formData;
 
     // Save to Supabase
     const { data: dbData, error: dbError } = await supabase
       .from('submissions')
-      .insert([{ fullName, email, phone, subject, message }])
+      .insert([{
+        companyName,
+        physicalAddress,
+        cityState,
+        postalCode,
+        tinNumber,
+        contactPerson,
+        phoneNumber,
+        emailAddress,
+        applicationDate,
+        originCriteria,
+        procedureDescription,
+        productDescription,
+        brandName,
+        hsCode,
+        countryOfExport,
+        destinationCountry,
+        commercialInvoiceNo,
+        invoiceDate,
+        exFactoryPrice,
+        fobValue,
+        quantityUnit,
+        packagingType,
+        inputMaterials: JSON.stringify(inputMaterials),
+        manufacturingProcess,
+        declarantName,
+        signatureName,
+        signaturePosition,
+        signatureDate
+      }])
       .select();
 
     if (dbError) {
@@ -62,11 +114,36 @@ export async function POST(req: Request) {
     // Send email via Resend
     const emailHtml = `
       <h2>New Form Submission</h2>
-      <p><strong>Name:</strong> ${fullName}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Phone:</strong> ${phone}</p>
-      <p><strong>Subject:</strong> ${subject}</p>
-      <p><strong>Message:</strong> ${message}</p>
+      <ul>
+        <li><b>Company Name:</b> ${companyName}</li>
+        <li><b>Physical Address:</b> ${physicalAddress}</li>
+        <li><b>City/State:</b> ${cityState}</li>
+        <li><b>Postal Code:</b> ${postalCode}</li>
+        <li><b>TIN Number:</b> ${tinNumber}</li>
+        <li><b>Contact Person:</b> ${contactPerson}</li>
+        <li><b>Phone Number:</b> ${phoneNumber}</li>
+        <li><b>Email Address:</b> ${emailAddress}</li>
+        <li><b>Application Date:</b> ${applicationDate}</li>
+        <li><b>Origin Criteria:</b> ${originCriteria}</li>
+        <li><b>Procedure Description:</b> ${procedureDescription}</li>
+        <li><b>Product Description:</b> ${productDescription}</li>
+        <li><b>Brand Name:</b> ${brandName}</li>
+        <li><b>HS Code:</b> ${hsCode}</li>
+        <li><b>Country of Export:</b> ${countryOfExport}</li>
+        <li><b>Destination Country:</b> ${destinationCountry}</li>
+        <li><b>Commercial Invoice No.:</b> ${commercialInvoiceNo}</li>
+        <li><b>Invoice Date:</b> ${invoiceDate}</li>
+        <li><b>Ex-Factory Price:</b> ${exFactoryPrice}</li>
+        <li><b>FOB Value:</b> ${fobValue}</li>
+        <li><b>Quantity/Unit:</b> ${quantityUnit}</li>
+        <li><b>Packaging Type:</b> ${packagingType}</li>
+        <li><b>Input Materials:</b> <pre>${JSON.stringify(inputMaterials, null, 2)}</pre></li>
+        <li><b>Manufacturing Process:</b> ${manufacturingProcess}</li>
+        <li><b>Declarant Name:</b> ${declarantName}</li>
+        <li><b>Signature Name:</b> ${signatureName}</li>
+        <li><b>Signature Position:</b> ${signaturePosition}</li>
+        <li><b>Signature Date:</b> ${signatureDate}</li>
+      </ul>
     `;
 
     const emailRes = await resend.emails.send({
