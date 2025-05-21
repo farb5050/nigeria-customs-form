@@ -27,7 +27,26 @@ export async function POST(req: Request) {
     console.log("Received fields:", fields);
     console.log("Received files:", files);
 
-    const { fullName, email, phone, subject, message } = fields;
+    let fullName, email, phone, subject, message;
+
+    if (fields.formDataJson) {
+      try {
+        const formData = JSON.parse(fields.formDataJson);
+        fullName = formData.fullName || formData.exporterName;
+        email = formData.email || formData.exporterEmail;
+        phone = formData.phone;
+        subject = formData.subject;
+        message = formData.message;
+      } catch (e) {
+        console.error('Error parsing formDataJson:', e);
+      }
+    } else {
+      fullName = fields.fullName || fields.exporterName;
+      email = fields.email || fields.exporterEmail;
+      phone = fields.phone;
+      subject = fields.subject;
+      message = fields.message;
+    }
 
     // Save to Supabase
     const { data: dbData, error: dbError } = await supabase
