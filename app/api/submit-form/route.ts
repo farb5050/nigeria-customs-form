@@ -1,69 +1,71 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { resend } from '../../../lib/resendClient';
+import { resend } from '@/lib/resendClient';
+import { supabase } from '@/lib/supabaseClient';
+import { IncomingForm } from 'formidable';
+import type { NextApiRequest } from 'next';
 
-// Initialize Supabase Admin client with Service Role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const config = {
+  api: {
+    bodyParser: false, // Disables Next's default body parsing
+  },
+};
+
+function parseForm(req: any) {
+  return new Promise<{ fields: any; files: any }>((resolve, reject) => {
+    const form = new IncomingForm();
+    form.parse(req, (err, fields, files) => {
+      if (err) reject(err);
+      else resolve({ fields, files });
+    });
+  });
+}
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
+    // @ts-ignore
+    const { fields, files } = await parseForm(req);
+    console.log("Received fields:", fields);
+    console.log("Received files:", files);
 
-    // 1) Upload any File entries to Supabase Storage
-    const attachments: { field: string; url: string }[] = [];
-    for (const [field, value] of formData.entries()) {
-      if (value instanceof File) {
-        const file = value;
-        const path = `attachments/${Date.now()}_${file.name}`;
-        const { error: uploadError } = await supabaseAdmin
-          .storage
-          .from('attachments')
-          .upload(path, file);
-        if (uploadError) throw uploadError;
+    const { fullName, email, phone, subject, message } = fields;
 
-        const { data: urlData } = supabaseAdmin
-          .storage
-          .from('attachments')
-          .getPublicUrl(path);
-
-        attachments.push({ field, url: urlData.publicUrl });
-      }
-    }
-
-    // 2) Build the record object for text/other fields
-    const record: Record<string, any> = {};
-    for (const [key, value] of formData.entries()) {
-      if (!(value instanceof File)) {
-        record[key] = value;
-      }
-    }
-    record.attachments = attachments;
-
-    // 3) Insert into Supabase 'submissions' table
-    const { error: dbError } = await supabaseAdmin
+    // Save to Supabase
+    const { data: dbData, error: dbError } = await supabase
       .from('submissions')
-      .insert(record);
+      .insert([{ fullName, email, phone, subject, message }])
+      .select();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('Supabase insert error:', dbError);
+      return NextResponse.json({ success: false, error: dbError.message }, { status: 500 });
+    }
 
-    // 4) Send notification email via Resend
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: process.env.RESEND_TO_EMAILS!.split(','),
-      subject: `New Submission: ${record.company_name || 'Form Submission'}`,
-      html: `<p>A new form was submitted by <strong>${record.company_name || 'a user'}</strong>.</p>
-             <p>Check the dashboard for full details.</p>`
+    // Send email via Resend
+    const emailHtml = `
+      <h2>New Form Submission</h2>
+      <p><strong>Name:</strong> ${fullName}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Phone:</strong> ${phone}</p>
+      <p><strong>Subject:</strong> ${subject}</p>
+      <p><strong>Message:</strong> ${message}</p>
+    `;
+
+    const emailRes = await resend.emails.send({
+      from: 'noreply@ncs.gov.ng',
+      to: ['suleiman.idris@customs.gov.ng', 'bisulaiman2010@gmail.com'],
+      subject: `Customs Form Submission: ${subject || 'New Entry'}`,
+      html: emailHtml,
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('API submit error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    console.log("Resend response:", emailRes);
+
+    if (emailRes.error) {
+      return NextResponse.json({ success: false, error: emailRes.error }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, dbData, emailRes });
+  } catch (err: any) {
+    console.error('API error:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
